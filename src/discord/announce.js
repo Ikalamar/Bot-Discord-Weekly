@@ -55,14 +55,27 @@ function weeklyAnnouncement({ type, date, timezone, games, url }) {
   );
 }
 
+// Signale en annonce les sections (homepage/registration/attendees/events) que
+// start.gg a refuse de publier, pour qu'un echec ne passe plus inapercu (avant
+// ca finissait uniquement en console.warn, jamais vu par l'organisateur).
+function publishWarning(result) {
+  if (!result.publishing) return '';
+  const failed = Object.entries(result.publishing).filter(([, r]) => !r.ok);
+  if (failed.length === 0) return '';
+  const features = failed.map(([feature]) => `\`${feature}\``).join(', ');
+  return `\n\n-# ⚠️ Publication incomplète sur start.gg (${features}) — vérifie la page et republie si besoin.`;
+}
+
 function successMessage(result) {
-  return weeklyAnnouncement({
-    type: result.type,
-    date: result.startAt || null,
-    timezone: result.timezone,
-    games: result.requestedGames,
-    url: result.url,
-  });
+  return (
+    weeklyAnnouncement({
+      type: result.type,
+      date: result.startAt || null,
+      timezone: result.timezone,
+      games: result.requestedGames,
+      url: result.url,
+    }) + publishWarning(result)
+  );
 }
 
 function warningMessage(result) {

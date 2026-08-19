@@ -1,0 +1,137 @@
+// Creation de tournoi (vierge ou clone) sur une page Playwright deja ouverte
+// sur la page de creation. Le cycle de vie du navigateur appartient a StartGG
+// (index.js).
+
+import { CREATE_PAGE, CLONE_ENDPOINT, API_HEADERS } from './config.js';
+import { dismissCookieConsent, typeMasked, getRecaptchaSiteKey, toUnix, toMask } from './util.js';
+
+// Levee quand le srcTournamentId a cloner n'existe pas.
+export class SourceTournamentNotFoundError extends Error {
+  constructor(srcTournamentId) {
+    super(`Source tournament ${srcTournamentId} does not exist`);
+    this.name = 'SourceTournamentNotFoundError';
+    this.code = 'SOURCE_NOT_FOUND';
+    this.srcTournamentId = srcTournamentId;
+  }
+}
+
+export const DEFAULT_CLONING_OPTIONS = {
+  details: true,
+  permissions: true,
+  events: true,
+  registrationOptions: true,
+  attendeeRequirements: true,
+  payments: true,
+  bracketSetup: true,
+  schedule: true,
+  stationsAndStreams: true,
+  blockList: true,
+};
+
+/**
+ * @param {import('playwright').Page} page  Doit etre sur la page de creation.
+ * @param {Object} params
+ * @param {string} params.name
+ * @param {string} params.primaryContact
+ * @param {string} [params.primaryContactType='email']
+ * @param {number|string|Date} params.startAt
+ * @param {number|string|Date} params.endAt
+ * @param {number} [params.srcTournamentId]  Si defini, clone ce tournoi.
+ * @param {Object} [params.cloningOptions]
+ * @returns {Promise<{ id: number|null, slug: string|null, name: string }>}
+ */
+export async function createTournamentOnPage(page, params) {
+  const {
+    name,
+    primaryContact,
+    primaryContactType = 'email',
+    startAt,
+    endAt,
+    srcTournamentId = null,
+    cloningOptions = DEFAULT_CLONING_OPTIONS,
+  } = params;
+
+  if (srcTournamentId != null) {
+    return cloneTournament(page, {
+      name,
+      primaryContact,
+      primaryContactType,
+      startAt: toUnix(startAt),
+      endAt: toUnix(endAt),
+      srcTournamentId,
+      cloningOptions,
+    });
+  }
+
+  return fillCreateForm(page, {
+    name,
+    primaryContact,
+    startAt: toMask(startAt),
+    endAt: toMask(endAt),
+  });
+}
+
+// --- Clone (REST + reCAPTCHA genere dans la page) ----------------------------
+
+async function cloneTournament(page, payload) {
+  const siteKey = await getRecaptchaSiteKey(page);
+  if (!siteKey) throw new Error('Could not find the reCAPTCHA site key on the page.');
+
+  const { status, body } = await page.evaluate(
+    async ({ siteKey, payload, endpoint, headers }) => {
+      const captcha = await new Promise((resolve) => {
+        window.grecaptcha.ready(() =>
+          window.grecaptcha
+            .execute(siteKey, { action: 'create_tournament' })
+            .then(resolve)
+            .catch(() => resolve(null)),
+        );
+      });
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ...payload, captcha }),
+      });
+      return { status: res.status, body: await res.text() };
+    },
+    { siteKey, payload, endpoint: CLONE_ENDPOINT, headers: API_HEADERS },
+  );
+
+  let data;
+  try {
+    data = JSON.parse(body);
+  } catch {
+    throw new Error(`Clone failed: HTTP ${status} (non-JSON response)`);
+  }
+
+  if (status !== 200 || data.success === false) {
+    const message = data.message || `HTTP ${status}`;
+    if (/source tournament does not exist/i.test(message)) {
+      throw new SourceTournamentNotFoundError(payload.srcTournamentId);
+    }
+    throw new Error(`Clone failed: ${message}`);
+  }
+
+  const t = data?.entities?.tournament?.[0];
+  return { id: t?.id ?? null, slug: t?.slug ?? null, name: t?.name ?? payload.name };
+}
+
+// --- Creation vierge (formulaire) --------------------------------------------
+
+async function fillCreateForm(page, { name, primaryContact, startAt, endAt }) {
+  await dismissCookieConsent(page);
+  await page.fill('input[name="name"]', name);
+  await page.fill('input[name="primaryContact"]', primaryContact);
+  await typeMasked(page, 'input[name="startAt"]', startAt);
+  await typeMasked(page, 'input[name="endAt"]', endAt);
+
+  await page.locator('button[type="submit"]').first().click();
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(1500);
+
+  // La page de creation enregistre sans renvoyer l'id du nouveau tournoi.
+  // Passer par le clone si l'id/slug est necessaire.
+  return { id: null, slug: null, name };
+}
+
+export { CREATE_PAGE };

@@ -1,0 +1,10 @@
+{
+  "_comment": "Copie automatiquement en config.json au premier demarrage. Les salons et le role se configurent ensuite via les commandes Discord (/set-channel, /salon-admin, /set-role) ; seul contact.value est a remplir a la main.",
+  "discordChannels": [],
+  "controlChannel": null,
+  "weeklyRoleId": null,
+  "contact": {
+    "type": "discord",
+    "value": ""
+  }
+}

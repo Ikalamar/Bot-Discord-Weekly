@@ -1,0 +1,15 @@
+{
+  "_comment": "Horaires fixes par weekly, donnes par l'organisateur. Format 24h, HH:MM.",
+  "Bagarre 2 Bar": {
+    "dayOfWeek": "tuesday",
+    "startTime": "18:00",
+    "endTime": "23:00",
+    "timezone": "Europe/Paris"
+  },
+  "72 Hit Combo": {
+    "dayOfWeek": "sunday",
+    "startTime": "18:00",
+    "endTime": "22:00",
+    "timezone": "Europe/Paris"
+  }
+}

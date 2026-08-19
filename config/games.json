@@ -1,0 +1,61 @@
+{
+  "_comment": "startggId a completer : requete videogames(query: {filter: {name: \"...\"}}) sur l'API start.gg. Laisse a null tant que non verifie.",
+  "games": [
+    {
+      "key": "SSBU",
+      "displayName": "Super Smash Bros. Ultimate",
+      "startggId": null,
+      "aliases": ["SSBU", "Smash Ultimate", "Smash Bros Ultimate"],
+      "alwaysPresent": true
+    },
+    {
+      "key": "2XKO",
+      "displayName": "2XKO",
+      "startggId": null,
+      "aliases": ["2XKO", "Project L"],
+      "alwaysPresent": false
+    },
+    {
+      "key": "SF6",
+      "displayName": "Street Fighter 6",
+      "startggId": null,
+      "aliases": ["SF6", "Street Fighter 6", "Street Fighter VI"],
+      "alwaysPresent": false
+    },
+    {
+      "key": "GGST",
+      "displayName": "Guilty Gear -Strive-",
+      "startggId": null,
+      "aliases": ["GGST", "Guilty Gear Strive", "Guilty Gear -Strive-"],
+      "alwaysPresent": false
+    },
+    {
+      "key": "RoA2",
+      "displayName": "Rivals of Aether II",
+      "startggId": null,
+      "aliases": ["RoA2", "Rivals of Aether 2", "Rivals of Aether II"],
+      "alwaysPresent": false
+    },
+    {
+      "key": "Tokon",
+      "displayName": "Marvel Tokon: Fighting Souls",
+      "startggId": null,
+      "aliases": ["Marvel Tokon", "Marvel Tokon: Fighting Souls", "Tokon"],
+      "alwaysPresent": false
+    },
+    {
+      "key": "Avatar",
+      "displayName": "Avatar",
+      "startggId": null,
+      "aliases": ["Avatar"],
+      "alwaysPresent": false
+    },
+    {
+      "key": "COTW",
+      "displayName": "COTW",
+      "startggId": null,
+      "aliases": ["COTW"],
+      "alwaysPresent": false
+    }
+  ]
+}

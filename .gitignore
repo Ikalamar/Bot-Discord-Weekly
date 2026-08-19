@@ -1,0 +1,15 @@
+node_modules/
+
+# Secrets et identifiants
+.env
+
+# Config propre a chaque serveur Discord (cree depuis config.example.json)
+config/config.json
+
+# Etat runtime : session start.gg, confirmations en attente, historique
+data/*
+!data/.gitkeep
+
+# Divers
+.claude/
+.DS_Store

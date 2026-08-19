@@ -1,0 +1,25 @@
+{
+  "name": "bot-startgg",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bot Discord qui cree, publie et annonce automatiquement les pages start.gg des weeklies FGC a partir d'un Google Sheet",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "postinstall": "playwright install chromium",
+    "lookup:videogames": "node tools/lookup-videogame.js",
+    "debug:requests": "node tools/capture-requests.mjs",
+    "debug:form": "node tools/inspect-form.mjs"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5",
+    "googleapis": "^140.0.1",
+    "node-cron": "^3.0.3",
+    "playwright": "^1.62.1"
+  }
+}

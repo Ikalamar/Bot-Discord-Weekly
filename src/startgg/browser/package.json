@@ -1,0 +1,4 @@
+{
+  "//": "Ce sous-dossier est en ESM alors que le reste du projet est en CommonJS. Pas de dependances ici : playwright est declare dans le package.json racine, pour n'avoir qu'un seul npm install et une seule version de navigateur installee.",
+  "type": "module"
+}

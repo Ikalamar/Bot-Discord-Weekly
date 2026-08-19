@@ -1,4 +1,4 @@
-// Job quotidien. Pour chaque ligne "Weekly" du sheet a J-3 max :
+// Verification automatique quotidienne. Pour chaque ligne "Weekly" du sheet a J-3 max :
 //
 //   - tournoi deja existant sur start.gg -> demande dans le salon de controle
 //     s'il faut annoncer (aucune creation)
@@ -64,11 +64,11 @@ function start(client) {
   cron.schedule(
     '0 8 * * *',
     () => {
-      runCheck(client).catch((err) => console.error('cron runCheck a plante:', err));
+      runCheck(client).catch((err) => console.error('Verification quotidienne plantee:', err));
     },
     { timezone: 'Europe/Paris' },
   );
-  console.log('Cron quotidien programme (8h00 Europe/Paris).');
+  console.log('Verification quotidienne programmee (8h00 Europe/Paris).');
 }
 
 module.exports = { start, runCheck };

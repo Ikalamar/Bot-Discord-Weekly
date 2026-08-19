@@ -1,5 +1,5 @@
 // Point d'entree du bot : connexion Discord, enregistrement des commandes
-// slash, demarrage du cron quotidien.
+// slash, demarrage de la verification quotidienne automatique.
 
 const path = require('path');
 const fs = require('fs');

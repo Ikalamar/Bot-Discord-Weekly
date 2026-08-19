@@ -26,7 +26,7 @@ module.exports = {
       return;
     }
 
-    // Meme verification que le cron automatique, pour ne jamais proposer de
+    // Meme verification que celle faite automatiquement chaque jour, pour ne jamais proposer de
     // creer un tournoi qui existe deja.
     const match = await findExistingMatch(row.name);
 

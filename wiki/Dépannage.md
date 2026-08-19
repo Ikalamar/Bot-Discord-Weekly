@@ -1,105 +1,81 @@
 # Dépannage
 
-Solutions aux problèmes déjà rencontrés en conditions réelles pendant le
-développement de ce bot.
+## Commandes slash absentes dans Discord
 
-## Les commandes slash n'apparaissent pas dans Discord
+Cause fréquente : bot invité sans scope `applications.commands` (seul `bot`
+coché).
 
-**Cause la plus fréquente** : le bot a été invité sans le scope
-`applications.commands` (seul `bot` a été coché lors de la génération du
-lien d'invitation).
+Solution : [Discord Developer Portal](https://discord.com/developers/applications) →
+OAuth2 → URL Generator, cocher `bot` et `applications.commands`, régénérer
+l'URL, autoriser à nouveau. Pas besoin de retirer le bot au préalable.
 
-**Solution** : retourne sur [Discord Developer Portal → OAuth2 → URL
-Generator](https://discord.com/developers/applications), coche **les deux**
-scopes `bot` et `applications.commands`, régénère l'URL, ouvre-la et
-autorise à nouveau — pas besoin de retirer le bot du serveur au préalable,
-réautoriser suffit à ajouter le scope manquant.
+Autre cause : propagation des commandes globales, jusqu'à 1h.
 
-**Autre cause possible** : propagation. Les commandes globales (notre cas)
-peuvent mettre jusqu'à une heure à apparaître après un premier
-enregistrement.
+Si le bot tourne et logue `X commande(s) slash enregistree(s).` mais que
+rien n'apparaît : `Ctrl+R` dans le client Discord.
 
-**Si le bot tourne et les commandes sont bien enregistrées** (le terminal
-affiche `X commande(s) slash enregistree(s).`) mais qu'elles restent
-invisibles : `Ctrl+R` (ou `Cmd+R`) dans le client Discord force le
-rafraîchissement du cache local des commandes.
+## "This interaction failed" sur un bouton
 
-## « This interaction failed » en cliquant sur un bouton
+Interaction non acquittée dans les 3 secondes (Discord invalide
+automatiquement). Cause typique : crash avant `interaction.reply()` /
+`.update()` / `.deferUpdate()`, par exemple erreur de syntaxe dans le message
+construit. L'erreur réelle est dans les logs du bot, pas dans le message
+Discord.
 
-Discord invalide une interaction non-acquittée au bout de 3 secondes. Si le
-code plante *avant* d'appeler `interaction.reply()` / `.update()` /
-`.deferUpdate()` — par exemple une erreur de syntaxe dans le message
-construit — l'interaction n'est jamais acquittée et Discord affiche ce
-timeout, sans que l'erreur réelle soit visible ailleurs que dans les logs du
-bot. Le réflexe : regarder le terminal du bot, l'erreur exacte y est
-loggée.
+## Lien start.gg sans aperçu
 
-## Le lien start.gg s'affiche sans aperçu (pas de carte avec image/titre)
+Permission **Embed Links** manquante sur le bot.
 
-Il manque la permission **Embed Links** au bot. Sans elle, Discord affiche le
-lien en texte brut mais ne génère pas la carte de prévisualisation.
-
-**Solution rapide** : Paramètres du serveur → Rôles → rôle du bot → activer
-**Intégrer des liens**.
-
-**Solution alternative** : régénérer un lien d'invitation OAuth2 avec cette
-permission cochée, et réautoriser (voir plus haut).
+Solution : Paramètres du serveur → Rôles → rôle du bot → activer Intégrer
+des liens. Alternative : régénérer le lien d'invitation avec cette
+permission cochée.
 
 ## `browserType.launch: Executable doesn't exist`
 
-Playwright cherche un navigateur d'une révision précise qui n'est plus sur le
-disque. Ça arrive typiquement après avoir lancé `npx playwright install`
-depuis un dossier différent de celui où `playwright` est réellement installé
-(deux installations de Playwright sur la même machine peuvent chacune
-réclamer une révision de navigateur différente, et une réinstallation peut
-purger les révisions dont *elle* n'a pas besoin, y compris celles utilisées
+Playwright cherche une révision de navigateur absente du disque. Cause
+typique : `npx playwright install` lancé depuis un dossier différent de
+celui où `playwright` est réellement installé (deux installations
+distinctes réclament des révisions différentes ; une réinstallation peut
+purger les révisions dont elle n'a pas besoin, y compris celles utilisées
 par l'autre installation).
 
-**Solution** : dans ce projet, une seule installation de Playwright existe
-(déclarée dans le `package.json` racine). Réinstalle simplement les
-navigateurs depuis la racine du projet :
+Solution : ce projet n'a qu'une seule installation de Playwright, déclarée
+dans le `package.json` racine.
 
 ```bash
 npx playwright install chromium
 ```
 
-Si le problème revient régulièrement, vérifie qu'aucune autre installation
-de Playwright ne traîne ailleurs sur la machine (`npm ls playwright` dans
-d'autres projets), et évite de lancer `npx playwright install` en dehors de
-ce dossier.
+Vérifier l'absence d'autres installations Playwright sur la machine
+(`npm ls playwright` dans d'autres projets) si le problème persiste.
 
-## Tournoi créé mais pas « Discoverable »
+## Tournoi créé mais pas Discoverable
 
-Comportement attendu, pas un bug : start.gg refuse de rendre un tournoi
-visible dans sa recherche tant que le compte qui l'a créé a moins de 6 heures
-d'existence. Le tournoi reste publié en mode « Link only », pleinement
-utilisable pour l'annonce Discord (le lien direct fonctionne normalement).
-Voir [Fonctionnement
-technique](Fonctionnement-technique#le-compte-du-bot-doit-avoir-6-heures-dexistence)
-pour le détail. Ça se résout tout seul avec le temps, aucune action requise.
+Comportement attendu : start.gg refuse la visibilité en recherche pour tout
+compte de moins de 6h. Le tournoi reste en mode "Link only", pleinement
+fonctionnel. Détail : [Fonctionnement
+technique](Fonctionnement-technique#restriction-des-6-heures). Résolution
+automatique passé le délai.
 
-## Le bot recrée ou reconfirme le même tournoi plusieurs jours de suite
+## Tournoi recréé ou reconfirmé plusieurs jours de suite
 
-Vérifie que `data/processed-tournaments.json` existe et est accessible en
-écriture — c'est la mémoire qui empêche ce comportement (voir
-[Fonctionnement
-technique](Fonctionnement-technique#la-m%C3%A9moire-locale)). Si le fichier a
-été supprimé ou si le process n'a pas les droits d'écriture sur `data/`, le
-bot perd cette mémoire et retraite les mêmes lignes.
+Vérifier l'existence et les droits d'écriture de
+`data/processed-tournaments.json` (mémoire anti-répétition, voir
+[Fonctionnement technique](Fonctionnement-technique#m%C3%A9moire-locale)).
+Fichier supprimé ou non accessible en écriture → perte de la mémoire,
+retraitement des mêmes lignes.
 
-## La création automatique échoue systématiquement
+## Création automatique en échec systématique
 
-Vérifie dans l'ordre :
+Vérifications dans l'ordre :
 
-1. `STARTGG_EMAIL` / `STARTGG_PASSWORD` sont-ils corrects ? (teste-les en te
-   connectant manuellement sur start.gg)
-2. Le compte a-t-il bien les droits admin sur le tournoi de référence
-   pointé par `config/source-registry.json` pour ce type/combo de jeux ?
-3. `config/config.json` → `contact.value` est-il rempli ? (le bot refuse de
-   créer un tournoi sans ce champ)
-4. Le message d'erreur exact est loggé dans le terminal — c'est le point de
-   départ le plus fiable pour diagnostiquer plus loin.
+1. `STARTGG_EMAIL` / `STARTGG_PASSWORD` corrects (tester la connexion
+   manuelle).
+2. Droits admin du compte sur le tournoi de référence pointé par
+   `config/source-registry.json` pour le type/combo de jeux concerné.
+3. `config/config.json` → `contact.value` non vide (requis pour toute
+   création).
+4. Message d'erreur exact dans le terminal, point de départ du diagnostic.
 
-En cas d'échec, le bot poste automatiquement les instructions de création
-manuelle dans les salons d'annonces, pour qu'aucune weekly ne reste sans page
-en attendant la résolution du problème.
+En cas d'échec, instructions de création manuelle postées automatiquement
+dans les salons d'annonces.

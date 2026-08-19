@@ -1,80 +1,56 @@
 # Format du Google Sheet
 
-Le Sheet est la seule source de vérité pour le calendrier. Le bot le lit
-seul — **il n'y écrit jamais rien** (voir [Fonctionnement
-technique](Fonctionnement-technique#pourquoi-le-bot-n%C3%A9crit-rien-dans-le-sheet)
-pour la raison).
+Source de vérité du calendrier. Lecture seule : le bot n'y écrit jamais rien
+(voir [Fonctionnement
+technique](Fonctionnement-technique#pourquoi-le-bot-n%C3%A9crit-rien-dans-le-sheet)).
 
-## Colonnes attendues
+## Colonnes
 
-En-têtes en ligne 1, données à partir de la ligne 2, dans cet ordre :
+En-têtes en ligne 1, données à partir de la ligne 2 :
 
-| Colonne | A : Nom | B : Date | C : Jeux | D : Type |
-| --- | --- | --- | --- | --- |
-| Exemple | `Bagarre 2 Bar #138` | `25/08/2026` | `SSBU, SF6` | `Weekly` |
+| A : Nom | B : Date | C : Jeux | D : Type |
+| --- | --- | --- | --- |
+| `Bagarre 2 Bar #138` | `25/08/2026` | `SSBU, SF6` | `Weekly` |
 
-### A — Nom
+**A, Nom** : nom exact de la page start.gg créée. Sert aussi à détecter le
+type de weekly et à vérifier si le tournoi existe déjà.
 
-Le nom exact que la page start.gg créée portera. C'est aussi ce nom qui sert
-à détecter le type de weekly (voir plus bas) et à vérifier si le tournoi
-existe déjà.
+**B, Date** : format `JJ/MM/AAAA`. Seule la date compte ; les horaires sont
+fixés dans [`config/schedule.json`](Fichiers-de-configuration#scheduljson).
 
-### B — Date
+**C, Jeux** : liste séparée par des virgules, ordre indifférent (`SSBU, SF6`
+≡ `SF6, SSBU`). Chaque jeu doit correspondre à un alias de
+[`config/games.json`](Fichiers-de-configuration#gamesjson), sinon le texte
+brut est utilisé et la recherche du tournoi de référence peut échouer.
 
-Format `JJ/MM/AAAA`. C'est uniquement la **date** qui compte ici — les
-horaires sont fixés séparément dans
-[`config/schedule.json`](Fichiers-de-configuration#scheduljson).
+**D, Type** : doit valoir exactement `Weekly` (insensible à la casse). Toute
+autre valeur (vide, `Special`, etc.) fait ignorer la ligne, ce qui permet de
+garder dans le même sheet des événements ponctuels sans que le bot s'en
+mêle.
 
-### C — Jeux
+## Détection du type de weekly
 
-Liste des jeux séparés par une virgule, dans n'importe quel ordre :
-`SSBU, SF6` et `SF6, SSBU` sont strictement équivalents pour le bot. Chaque
-jeu doit correspondre à un alias connu dans
-[`config/games.json`](Fichiers-de-configuration#gamesjson) — sinon le bot
-utilise le texte tel quel, ce qui peut empêcher de trouver le bon tournoi de
-référence à cloner.
+Par expression régulière sur la colonne Nom :
 
-### D — Type
+- `bagarre 2 bar` / `bagarre de bar` → type `Bagarre 2 Bar`
+- `72 hit combo` → type `72 Hit Combo`
 
-**Doit valoir exactement `Weekly`** (insensible à la casse) pour qu'une ligne
-soit prise en compte. Toute autre valeur — vide, `Special`, un nom de
-tournoi, etc. — fait ignorer la ligne par le bot. Ça permet de garder dans le
-même sheet des lignes qui ne concernent pas le bot (ponctuels, événements
-spéciaux à créer à la main) sans qu'il s'en mêle.
+Détermine les horaires ([`schedule.json`](Fichiers-de-configuration#scheduljson))
+et le tournoi de référence
+([`source-registry.json`](Fichiers-de-configuration#source-registryjson)).
+Ajouter un type demande une modification de `detectType` dans
+`src/startgg/tournament.js`, pas seulement une entrée de configuration.
 
-## Comment le nom détermine le type de weekly
+## Fenêtre de traitement
 
-Le bot reconnaît le type de weekly directement dans le texte de la colonne
-Nom, par expression régulière :
+- Vérification quotidienne automatique : lignes `Weekly` dont la date tombe entre J-0 et J+3.
+- `/next-tournament` : ignore cette limite, prend la ligne `Weekly` la plus
+  proche dans le temps.
 
-- Contient « Bagarre 2 Bar » ou « Bagarre de Bar » → type `Bagarre 2 Bar`
-- Contient « 72 Hit Combo » → type `72 Hit Combo`
+Un tournoi déjà traité avec succès n'est pas reproposé (voir [mémoire
+locale](Fonctionnement-technique#m%C3%A9moire-locale)).
 
-Ce type sert ensuite à choisir les bons horaires
-([`schedule.json`](Fichiers-de-configuration#scheduljson)) et le bon tournoi
-de référence ([`source-registry.json`](Fichiers-de-configuration#source-registryjson)).
-
-> Ajouter un troisième type de weekly demande une petite modification de code
-> (`detectType` dans `src/startgg/tournament.js`), pas seulement une entrée de
-> configuration.
-
-## Quelles lignes sont traitées, et quand
-
-Deux mécaniques différentes lisent le sheet :
-
-- **Le cron quotidien** (8h, tous les jours) ne prend que les lignes dont la
-  date tombe **dans les 3 jours à venir** (J-3 à J-0). Une ligne dont la date
-  est plus lointaine est ignorée jusqu'à ce qu'elle entre dans cette fenêtre.
-- **La commande `/next-tournament`** ignore cette limite de 3 jours et prend
-  simplement la ligne « Weekly » la plus proche dans le temps, peu importe à
-  combien de jours elle se trouve.
-
-Dans les deux cas, seules les lignes de type `Weekly` sont considérées, et
-une ligne dont le tournoi a déjà été traité avec succès n'est plus reproposée
-(voir [Fonctionnement technique](Fonctionnement-technique#la-m%C3%A9moire-locale)
-pour le détail de cette mémoire).
-
-## Exemple de sheet
+## Exemple
 
 | Nom | Date | Jeux | Type |
 | --- | --- | --- | --- |
@@ -83,5 +59,5 @@ pour le détail de cette mémoire).
 | Tournoi spécial rentrée | 30/08/2026 | SSBU, Tekken 8 | Special |
 | Bagarre 2 Bar #139 | 01/09/2026 | SSBU, 2XKO | Weekly |
 
-Ici, le bot traite les deux premières lignes (et la quatrième une fois
-qu'elle entre dans sa fenêtre J-3), mais ignore complètement la troisième.
+Le bot traite les lignes 1, 2 et 4 (la 4 une fois dans sa fenêtre J-3),
+ignore la 3.

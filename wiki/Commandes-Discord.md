@@ -1,86 +1,71 @@
 # Commandes Discord
 
-Les quatre commandes du bot. Toutes nécessitent la permission **Gérer le
-serveur** sur le compte qui les exécute (configurable finement depuis
-**Paramètres du serveur → Intégrations → [nom du bot]** dans Discord, si tu
-veux autoriser un rôle spécifique plutôt que « Gérer le serveur »).
+Permission **Gérer le serveur** requise par défaut (ajustable par commande
+depuis Paramètres du serveur → Intégrations → [nom du bot]).
 
 ## `/set-channel`
 
-Ajoute ou retire un salon de la liste des salons d'annonces. **Plusieurs
-salons possibles** — chaque annonce est postée dans tous les salons
-enregistrés.
+Ajoute/retire un salon d'annonces. Plusieurs salons possibles : chaque
+annonce est postée dans tous les salons enregistrés.
 
 ```
 /set-channel salon:#annonces
-/set-channel salon:#annonces-discord-2 
 /set-channel salon:#annonces retirer:true
 ```
 
-| Option | Obligatoire | Description |
+| Option | Requis | Description |
 | --- | --- | --- |
-| `salon` | oui | Le salon à ajouter (ou retirer) |
-| `retirer` | non | `true` pour retirer le salon au lieu de l'ajouter |
+| `salon` | oui | Salon à ajouter ou retirer |
+| `retirer` | non | `true` pour retirer au lieu d'ajouter |
 
 ## `/salon-admin`
 
-Définit le salon de contrôle — **un seul à la fois**, contrairement aux
-salons d'annonces. C'est là que le bot demande confirmation quand il trouve
-un tournoi déjà existant, avant de l'annoncer.
+Définit le salon de contrôle (un seul), où le bot demande confirmation avant
+d'annoncer un tournoi trouvé déjà existant.
 
 ```
 /salon-admin salon:#staff-tournois
 ```
 
-| Option | Obligatoire | Description |
+| Option | Requis | Description |
 | --- | --- | --- |
-| `salon` | oui | Le salon de contrôle |
-| `retirer` | non | `true` pour désactiver le salon de contrôle |
+| `salon` | oui | Salon de contrôle |
+| `retirer` | non | `true` pour désactiver |
 
-Sans salon de contrôle configuré, le bot ne peut pas demander de
-confirmation : il se contente de logger un avertissement et ne poste rien
-dans ce cas précis (la création automatique, elle, n'est pas affectée).
+Sans salon de contrôle configuré : avertissement en log, aucune confirmation
+postée. La création automatique n'est pas affectée.
 
 ## `/set-role`
 
-Rôle mentionné en tête de chaque annonce publique de weekly.
+Rôle mentionné en tête des annonces publiques.
 
 ```
 /set-role role:@Weekly
 ```
 
-| Option | Obligatoire | Description |
+| Option | Requis | Description |
 | --- | --- | --- |
-| `role` | oui | Le rôle à mentionner |
-| `retirer` | non | `true` pour ne plus mentionner de rôle |
+| `role` | oui | Rôle à mentionner |
+| `retirer` | non | `true` pour retirer la mention |
 
-La mention est enveloppée dans un spoiler Discord (`||@Weekly||`) : le rôle
-est bien notifié, mais le tag ne s'affiche pas en évidence dans le message —
-un compromis courant pour garder l'annonce lisible tout en notifiant les
-intéressés.
+Mention enveloppée dans un spoiler (`||@Weekly||`) : notification envoyée,
+tag masqué dans le message.
 
 ## `/next-tournament`
 
-Déclenche à la demande la même vérification que fait le cron chaque matin,
-sans attendre le lendemain — pratique pour tester la configuration ou pour
-avancer manuellement sur le prochain tournoi du calendrier.
+Déclenche la vérification quotidienne à la demande.
 
 ```
 /next-tournament
 ```
 
-Pas d'option. Le comportement dépend de ce que le bot trouve :
+Aucune option. Trois cas :
 
-- **Aucune ligne « Weekly » à venir dans le sheet** → message d'erreur clair,
-  rien d'autre.
-- **Le tournoi existe déjà sur start.gg** → poste la demande de confirmation
-  dans le salon de contrôle (identique au flux automatique), et confirme
-  brièvement dans le salon où la commande a été tapée.
-- **Aucun tournoi existant** → propose directement, avec deux boutons **Oui,
-  créer** / **Non**, de lancer la création. Sur « Oui », le message se met à
-  jour en direct (`⏳ Création en cours...`) puis affiche le résultat une
-  fois le tournoi créé, publié et annoncé.
+- aucune ligne `Weekly` à venir → message d'erreur
+- tournoi déjà existant → confirmation postée dans le salon de contrôle,
+  accusé de réception dans le salon d'exécution
+- aucun doublon → boutons **Oui, créer** / **Non** ; sur oui, création +
+  publication + annonce avec suivi en direct du statut
 
-Contrairement au cron automatique, `/next-tournament` ne se limite pas aux
-tournois à 3 jours ou moins : elle prend le prochain, quelle que soit son
-échéance.
+Contrairement à la vérification automatique, ignore la limite J-3 : prend le prochain tournoi,
+quelle que soit son échéance.

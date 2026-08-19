@@ -1,78 +1,59 @@
-<div align="center">
+# Bot Discord Weekly
 
-# 🏆 Bot Discord Weekly
+Bot Discord qui automatise la création des pages start.gg de weeklies
+récurrentes à partir d'un calendrier tenu dans un Google Sheet : création
+(clone d'une édition de référence), publication, annonce.
 
-**Le bot qui crée tes tournois start.gg pendant que tu dors.**
+Documentation complète : [Wiki](../../wiki).
 
-Un calendrier dans un Google Sheet. Un bot qui vérifie chaque matin ce qui
-approche, crée la page start.gg de la weekly (logo, règlement, paiement,
-bracket — tout est repris), la publie, et l'annonce sur Discord. Zéro clic.
+## Fonctionnement
 
-[📖 Documentation complète (Wiki)](../../wiki) · [🐛 Signaler un bug](../../issues)
+Chaque jour, le bot vérifie automatiquement les tournois à venir dans le
+sheet. S'il n'existe pas encore sur start.gg, il le crée, le publie et
+l'annonce sur Discord tout seul. S'il existe déjà (créé à la main), il
+demande d'abord confirmation avant d'annoncer.
 
-</div>
+Une commande (`/next-tournament`) permet aussi de déclencher cette
+vérification à la demande, sans attendre le lendemain.
 
----
+## Pourquoi un navigateur headless
 
-## Pourquoi ce bot existe
+L'API GraphQL publique de start.gg n'expose aucune mutation de création de
+tournoi (vérifié sur le schéma complet ; même constat côté parry.gg). Le seul
+moyen de répliquer fidèlement une édition (permissions, paiement, bracket
+setup, logo, bannière) est de reproduire l'action "Copy settings from a
+previous tournament" faite par un organisateur dans l'interface web. Le bot
+pilote donc Chromium via Playwright pour appeler les endpoints internes du
+site, avec le token reCAPTCHA v3 que seule la page peut générer.
 
-Faire vivre une weekly FGC, c'est chaque semaine la même corvée : ouvrir
-start.gg, dupliquer la page de la dernière édition, corriger la date, publier,
-puis aller l'annoncer sur Discord. Rien de compliqué, mais c'est un rituel
-manuel qu'on oublie facilement — et qui prend 10 minutes qu'on n'a pas toujours.
+Détail complet : [Fonctionnement technique](../../wiki/Fonctionnement-technique).
 
-Ce bot fait exactement ça à ta place, tous les jours, automatiquement.
-
-## Ce qu'il fait
-
-Chaque matin, pour chaque tournoi qui approche dans ton calendrier :
-
-- **La page n'existe pas encore** → il la crée (clone complet d'une édition de
-  référence : logo, bannière, règlement, contact, permissions, paiement,
-  bracket), la publie, et poste l'annonce dans Discord — sans te demander
-  quoi que ce soit.
-- **La page existe déjà** (créée à la main) → il ne touche à rien, mais te
-  demande dans un salon dédié si tu veux qu'il fasse l'annonce.
-- **Un pépin survient** → il poste un mode d'emploi pour la créer à la main,
-  plutôt que de laisser la weekly sans annonce en silence.
-
-Une commande (`/next-tournament`) permet aussi de déclencher la vérification
-à la demande, sans attendre le lendemain matin.
-
-## Comment ça marche, en une phrase
-
-start.gg n'offre **aucun moyen officiel de créer un tournoi par API** — le
-bot pilote donc un navigateur headless pour reproduire exactement l'action
-qu'un organisateur ferait à la main (« Copy settings from a previous
-tournament »). Le détail complet — pourquoi, comment, et ce que ça implique —
-est expliqué dans le [Wiki](../../wiki/Fonctionnement-technique).
-
-## Démarrage rapide
+## Installation
 
 ```bash
 git clone <ce-repo>
 cd Bot-Discord-Weekly
-npm install            # installe aussi Chromium (Playwright)
-cp .env.example .env    # puis remplir les identifiants
+npm install       # installe aussi Chromium (Playwright)
+cp .env.example .env
 npm start
 ```
 
-Ça suppose d'avoir déjà en main un bot Discord, un compte start.gg dédié, et
-un accès au Google Sheet du calendrier. Le guide pas-à-pas (comptes à créer,
-permissions, configuration) est dans **[Installation et
-configuration](../../wiki/Installation-et-configuration)**.
+Prérequis : compte Discord (bot), compte start.gg dédié administrateur des
+tournois de référence, compte de service Google avec accès lecture au sheet.
+Procédure complète : [Installation et
+configuration](../../wiki/Installation-et-configuration).
 
 ## Documentation
 
 | Page | Contenu |
 | --- | --- |
-| [Installation et configuration](../../wiki/Installation-et-configuration) | Comptes nécessaires, variables d'environnement, premier lancement |
-| [Format du Google Sheet](../../wiki/Format-du-Google-Sheet) | Colonnes attendues, règles de saisie |
+| [Installation et configuration](../../wiki/Installation-et-configuration) | Comptes requis, variables d'environnement, premier lancement |
+| [Format du Google Sheet](../../wiki/Format-du-Google-Sheet) | Colonnes attendues |
 | [Fichiers de configuration](../../wiki/Fichiers-de-configuration) | `source-registry.json`, `schedule.json`, `games.json`, `config.json` |
 | [Commandes Discord](../../wiki/Commandes-Discord) | `/set-channel`, `/salon-admin`, `/set-role`, `/next-tournament` |
-| [Fonctionnement technique](../../wiki/Fonctionnement-technique) | Architecture, pourquoi un navigateur, endpoints utilisés, limites |
-| [Dépannage](../../wiki/Dépannage) | Solutions aux problèmes déjà rencontrés |
+| [Fonctionnement technique](../../wiki/Fonctionnement-technique) | Architecture, endpoints utilisés, limites connues |
+| [Dépannage](../../wiki/Dépannage) | Problèmes rencontrés et solutions |
 
 ## Licence
 
-MIT — voir [LICENSE](LICENSE).
+MIT, voir [LICENSE](LICENSE).

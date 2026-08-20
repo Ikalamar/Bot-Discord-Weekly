@@ -31,9 +31,9 @@ Détail complet : [Fonctionnement technique](../../wiki/Fonctionnement-technique
 ## Installation
 
 ```bash
-git clone <ce-repo>
+git clone https://github.com/Ikalamar/Bot-Discord-Weekly.git
 cd Bot-Discord-Weekly
-npm install       # installe aussi Chromium (Playwright)
+npm install
 cp .env.example .env
 npm start
 ```

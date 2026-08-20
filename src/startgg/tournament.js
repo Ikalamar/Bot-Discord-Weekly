@@ -10,6 +10,7 @@ const { loadConfig } = require('../config-store');
 const sourceRegistry = require(SOURCE_REGISTRY_FILE);
 const schedule = require(SCHEDULE_FILE);
 const gamesConfig = require(GAMES_FILE);
+const { waitForBannerReady } = require('./wait-for-banner');
 
 const BROWSER_LIB_URL = pathToFileURL(path.join(__dirname, 'browser', 'index.js')).href;
 
@@ -116,6 +117,14 @@ async function createTournamentForRow(row) {
       publishing = await gg.publishTournament(result.id, { discoverable: true });
       for (const [feature, r] of Object.entries(publishing).filter(([, r]) => !r.ok)) {
         console.warn(`Publication "${feature}" echouee pour "${row.name}": ${r.error}`);
+      }
+
+      // Laisse le temps a start.gg de propager la banniere fraichement clonee
+      // avant l'annonce, pour eviter que Discord ne fige un apercu par
+      // defaut en cache (voir wait-for-banner.js).
+      const bannerReady = await waitForBannerReady(result.id, result.slug);
+      if (!bannerReady) {
+        console.warn(`Banniere non confirmee a temps pour "${row.name}" avant annonce (apercu Discord possiblement generique).`);
       }
     }
 

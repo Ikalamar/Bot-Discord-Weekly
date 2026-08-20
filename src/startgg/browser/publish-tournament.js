@@ -13,8 +13,11 @@
 
 import { GQL_ENDPOINT, API_HEADERS } from './config.js';
 
-// Ids fixes du modele ProfileFeature de start.gg (pas par tournoi).
-const FEATURE_IDS = { homepage: 1, registration: 3, attendees: 6, events: 8 };
+// Ids fixes du modele ProfileFeature de start.gg (pas par tournoi). "events"
+// n'est PAS publie via updateProfilePublishing comme les autres sections :
+// start.gg utilise une mutation dediee (bulkUpdateEventPublishing), voir plus
+// bas.
+const FEATURE_IDS = { homepage: 1, registration: 3, attendees: 6, events: 5 };
 
 const UPDATE_PUBLISHING_QUERY = `mutation UpdatePublishing($profileType: String!, $profileId: ID!, $featureId: ID!, $publishState: PublishState!) {
   updateProfilePublishing(profileType: $profileType, profileId: $profileId, featureId: $featureId, publishState: $publishState) {
@@ -23,6 +26,54 @@ const UPDATE_PUBLISHING_QUERY = `mutation UpdatePublishing($profileType: String!
     __typename
   }
 }`;
+
+// Section "Events" : requete distincte interceptee au clic sur Save/Publish,
+// eventId: null publie tous les events du tournoi d'un coup.
+const UPDATE_PHASE_PUBLISHING_QUERY = `mutation UpdatePhasePublishing($tournamentId: ID!, $featureId: ID!, $publishState: PublishState!, $eventId: ID) {
+  bulkUpdateEventPublishing(
+    tournamentId: $tournamentId
+    featureId: $featureId
+    publishState: $publishState
+    eventId: $eventId
+  ) {
+    id
+    __typename
+  }
+}`;
+
+// Les events sont crees par start.gg de facon asynchrone juste apres le
+// clone, et pas tous en meme temps : ils apparaissent un par un sur
+// quelques secondes. bulkUpdateEventPublishing(eventId: null) ne publie que
+// les events deja crees au moment de l'appel : le lancer des qu'un premier
+// event existe publie ce seul event et laisse les suivants de cote. On
+// attend donc que le nombre d'events se stabilise (deux lectures
+// consecutives identiques, non nulles) avant de publier.
+const TOURNAMENT_EVENTS_QUERY = `query TournamentEvents($id: ID) {
+  tournament(id: $id) {
+    id
+    events {
+      id
+      __typename
+    }
+    __typename
+  }
+}`;
+
+async function waitForEventsToStabilize(page, tournamentId, { timeoutMs = 30_000, intervalMs = 2000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let previousCount = null;
+
+  for (;;) {
+    const result = await gqlRequest(page, 'TournamentEvents', TOURNAMENT_EVENTS_QUERY, { id: tournamentId });
+    const count = result.ok ? (result.data?.tournament?.events?.length ?? 0) : 0;
+
+    if (count > 0 && count === previousCount) return true;
+    previousCount = count;
+
+    if (Date.now() >= deadline) return count > 0; // au moins publier ce qui existe plutot que rien
+    await page.waitForTimeout(intervalMs);
+  }
+}
 
 const UPDATE_LISTING_QUERY = `mutation UpdateTournamentListingState($tournamentId: ID!, $fields: UpdateBasicFieldsTournament!) {
   updateBasicFieldsTournament(tournamentId: $tournamentId, fields: $fields) {
@@ -68,6 +119,20 @@ export async function publishTournament(page, tournamentId, { discoverable = tru
   const results = {};
 
   for (const [name, featureId] of Object.entries(FEATURE_IDS)) {
+    if (name === 'events') {
+      const eventsExist = await waitForEventsToStabilize(page, tournamentId);
+      if (!eventsExist) {
+        results[name] = { ok: false, error: 'Aucun event visible cote start.gg apres le delai d\'attente (clone pas encore propage).' };
+        continue;
+      }
+      results[name] = await gqlRequest(page, 'UpdatePhasePublishing', UPDATE_PHASE_PUBLISHING_QUERY, {
+        tournamentId,
+        featureId,
+        publishState: 'PUBLISHED',
+        eventId: null,
+      });
+      continue;
+    }
     results[name] = await gqlRequest(page, 'UpdatePublishing', UPDATE_PUBLISHING_QUERY, {
       profileType: 'tournament',
       profileId: tournamentId,

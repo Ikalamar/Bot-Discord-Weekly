@@ -23,7 +23,12 @@ exécuté dans la page des mêmes endpoints internes utilisés par le site :
 
 - `POST /api/-/rest/tournament/cloneTournamentPublic` : création par clone.
 - `POST /api/-/gql`, mutation `updateProfilePublishing` : publication par
-  section (Homepage, Registration, Attendees, Events).
+  section pour Homepage, Registration, Attendees.
+- `POST /api/-/gql`, mutation `bulkUpdateEventPublishing` (`UpdatePhasePublishing`) :
+  publication de la section Events. Mutation distincte des trois précédentes
+  (prend `tournamentId` + `eventId: null` plutôt que `profileType`/`profileId`) ;
+  l'appeler avec `updateProfilePublishing` réussit silencieusement (`ok:true`)
+  sans rien publier côté site.
 - `POST /api/-/gql`, mutation `updateBasicFieldsTournament` (`{ approved: true }`) :
   visibilité dans la recherche start.gg.
 

@@ -51,4 +51,25 @@ async function findTournamentByExactName(name) {
   return { url: `https://www.start.gg/${match.slug}`, startAt: match.startAt ?? null, timezone: match.timezone ?? null };
 }
 
-module.exports = { queryStartgg, findTournamentByExactName };
+const TOURNAMENT_IMAGES_QUERY = `
+  query TournamentImages($id: ID!) {
+    tournament(id: $id) {
+      images {
+        type
+        url
+      }
+    }
+  }
+`;
+
+/**
+ * @param {number} tournamentId
+ * @returns {Promise<string|null>} URL de la banniere, ou null si non configuree.
+ */
+async function getTournamentBannerUrl(tournamentId) {
+  const data = await queryStartgg(TOURNAMENT_IMAGES_QUERY, { id: tournamentId });
+  const images = data.tournament?.images || [];
+  return images.find((i) => i.type === 'banner')?.url ?? null;
+}
+
+module.exports = { queryStartgg, findTournamentByExactName, getTournamentBannerUrl };

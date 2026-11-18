@@ -1,16 +1,9 @@
 {
   "_comment": "Cle = jeux tries alphabetiquement, joints par virgule (ex: 'SSBU,2XKO'). Valeur = id numerique d'un vrai tournoi start.gg deja publie avec exactement cette liste d'events, utilise comme source de clone. Rempli/maintenu a la main par l'organisateur : l'id est visible via GetTournament sur l'API publique.",
-  "Bagarre 2 Bar": {
-    "SSBU": 684607,
-    "2XKO,SSBU": 937245,
-    "Avatar,SSBU": 937434,
-    "GGST,SSBU": 930365,
-    "COTW,SSBU": 927918,
-    "SF6,SSBU": 937441,
-    "SSBU,Tokon": 937438,
-    "RoA2,SSBU": 918266
-  },
   "72 Hit Combo": {
     "SSBU": 937445
+  },
+  "O'Corner Pressure": {
+    "SSBU": 975073
   }
 }

@@ -26,6 +26,13 @@ export const DEFAULT_CLONING_OPTIONS = {
   schedule: true,
   stationsAndStreams: true,
   blockList: true,
+  // Cases ajoutees par start.gg a l'ecran de clone (valeurs par defaut de l'UI,
+  // sauf publishing qui est decoche par defaut). Publishing ne s'applique que
+  // si le tournoi remplit les prerequis de publication, sinon il reste non
+  // publie : publish-tournament.js verifie et complete a la main si besoin.
+  publishing: true,
+  shortSlug: true,
+  hubs: true,
 };
 
 /**
@@ -37,6 +44,7 @@ export const DEFAULT_CLONING_OPTIONS = {
  * @param {number|string|Date} params.startAt
  * @param {number|string|Date} params.endAt
  * @param {number} [params.srcTournamentId]  Si defini, clone ce tournoi.
+ * @param {boolean} [params.publish=true]  Coche "Publishing" au clone ; false = tournoi cree non publie.
  * @param {Object} [params.cloningOptions]
  * @returns {Promise<{ id: number|null, slug: string|null, name: string }>}
  */
@@ -48,7 +56,9 @@ export async function createTournamentOnPage(page, params) {
     startAt,
     endAt,
     srcTournamentId = null,
-    cloningOptions = DEFAULT_CLONING_OPTIONS,
+    publish = true,
+    // Non publie : on ne deplace pas le short URL vers une page invisible.
+    cloningOptions = { ...DEFAULT_CLONING_OPTIONS, publishing: publish, shortSlug: DEFAULT_CLONING_OPTIONS.shortSlug && publish },
   } = params;
 
   if (srcTournamentId != null) {
@@ -90,7 +100,7 @@ async function cloneTournament(page, payload) {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ ...payload, captcha }),
+        body: JSON.stringify({ ...payload, captcha, validationKey: 'create-new-tournament' }),
       });
       return { status: res.status, body: await res.text() };
     },

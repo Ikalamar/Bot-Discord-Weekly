@@ -22,6 +22,11 @@ Connexion identique à un organisateur humain, puis appel via `fetch()`
 exécuté dans la page des mêmes endpoints internes utilisés par le site :
 
 - `POST /api/-/rest/tournament/cloneTournamentPublic` : création par clone.
+  Les options de copie (`cloningOptions`) reprennent les cases de l'écran
+  « Clone a past tournament », dont `publishing`, `shortSlug` et `hubs`
+  (`validationKey: "create-new-tournament"` requis). `publishing: true`
+  publie automatiquement, mais seulement si le tournoi remplit les
+  prérequis de publication de start.gg.
 - `POST /api/-/gql`, mutation `updateProfilePublishing` : publication par
   section pour Homepage, Registration, Attendees.
 - `POST /api/-/gql`, mutation `bulkUpdateEventPublishing` (`UpdatePhasePublishing`) :
@@ -64,6 +69,15 @@ actions correspondantes (Publish, Copy settings). Outils conservés dans
 moins de 6h d'existence, garde-fou anti-spam de start.gg. Message renvoyé :
 `"Your account must be at least 6 hours old to make tournaments discoverable"`.
 
+### Vérification après le clone
+
+Le clone est lancé avec `publishing: true`. Le bot ne s'y fie pas aveuglément :
+`ensureTournamentPublished` (`publish-tournament.js`) attend que tous les
+events soient créés (ils apparaissent un par un après le clone), relit l'état
+réel (`publishing.publish/registration/attendees` du tournoi, `publishing.publish`
+de chaque event, `approved`), puis ne publie à la main que les sections
+manquantes. Si start.gg a tout publié seul, aucune mutation n'est envoyée.
+
 Chaque section est publiée individuellement ; l'échec de Discoverable ne
 bloque pas les autres. Le tournoi reste en mode "Link only" (accessible par
 lien direct, non listé), pleinement fonctionnel pour l'annonce. Résolution
@@ -105,7 +119,17 @@ Pour chaque ligne "Weekly" du sheet a J-3 ou moins :
 
   Existe deja sur start.gg (deux etages) ?
     OUI -> confirmation dans le salon de controle, marque comme traite
-    NON -> clone + publication + annonce automatique, marque comme traite
+    NON -> modele exact pour la combinaison de jeux ?
+             OUI -> clone + publication + annonce automatique, marque comme traite
+             NON -> clone depuis le modele de repli (Smash seul) SANS publier
+                    (publishing: false, short URL non deplace), puis demande
+                    dans le salon de controle : "publier et annoncer avec les
+                    events manquants ?" (boutons Oui/Non). Oui -> publication
+                    + annonce des jeux reellement presents. Non -> la page
+                    reste telle quelle, rien n'est annonce. Marque comme
+                    traite dans les deux cas (pas de relance quotidienne).
+                    Sans salon de controle : creation + publication +
+                    annonce directes, comme avant.
 
   Echec de creation ?
     -> instructions manuelles postees

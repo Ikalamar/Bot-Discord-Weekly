@@ -108,21 +108,31 @@ async function gqlRequest(page, operationName, query, variables) {
 }
 
 /**
- * Publie toutes les sections (Homepage, Registration, Attendees, Events) d'un
- * tournoi, et le rend optionnellement visible dans la recherche start.gg.
+ * Publie les sections (Homepage, Registration, Attendees, Events) d'un tournoi,
+ * et le rend optionnellement visible dans la recherche start.gg.
  * @param {import('playwright').Page} page  N'importe quelle page sur le domaine start.gg.
  * @param {number} tournamentId
- * @param {{ discoverable?: boolean }} [opts]
+ * @param {Object} [opts]
+ * @param {boolean} [opts.discoverable=true]
+ * @param {string[]} [opts.sections]  Sections a publier (defaut : toutes).
+ * @param {boolean} [opts.eventsReady]  true : events deja stabilises, pas d'attente ;
+ *   false : aucun event, echec direct ; undefined : attend la stabilisation.
  * @returns {Promise<Object>} resultat par section, ex: { homepage: {ok:true}, discoverable: {ok:false, error} }
  */
-export async function publishTournament(page, tournamentId, { discoverable = true } = {}) {
+export async function publishTournament(
+  page,
+  tournamentId,
+  { discoverable = true, sections = Object.keys(FEATURE_IDS), eventsReady } = {},
+) {
   const results = {};
 
   for (const [name, featureId] of Object.entries(FEATURE_IDS)) {
+    if (!sections.includes(name)) continue;
+
     if (name === 'events') {
-      const eventsExist = await waitForEventsToStabilize(page, tournamentId);
-      if (!eventsExist) {
-        results[name] = { ok: false, error: 'Aucun event visible cote start.gg apres le delai d\'attente (clone pas encore propage).' };
+      const ready = eventsReady ?? (await waitForEventsToStabilize(page, tournamentId));
+      if (!ready) {
+        results[name] = { ok: false, error: "Aucun event visible cote start.gg apres le delai d'attente (clone pas encore propage)." };
         continue;
       }
       results[name] = await gqlRequest(page, 'UpdatePhasePublishing', UPDATE_PHASE_PUBLISHING_QUERY, {
@@ -146,6 +156,80 @@ export async function publishTournament(page, tournamentId, { discoverable = tru
       tournamentId,
       fields: { approved: true },
     });
+  }
+
+  return results;
+}
+
+// --- Verification de l'etat reel ------------------------------------------------
+
+async function restGet(page, path) {
+  const { status, body } = await page.evaluate(
+    async ({ path, headers }) => {
+      const res = await fetch(path, { headers });
+      return { status: res.status, body: await res.text() };
+    },
+    { path, headers: API_HEADERS },
+  );
+  if (status !== 200) throw new Error(`GET ${path} -> HTTP ${status}`);
+  return JSON.parse(body);
+}
+
+/**
+ * Etat de publication reel, tel que le voit le dashboard admin.
+ * @param {string} slug  Slug start.gg complet, ex: "tournament/mon-tournoi".
+ * @returns {Promise<{ homepage: boolean, registration: boolean, attendees: boolean, events: boolean, discoverable: boolean }>}
+ */
+export async function getPublishState(page, slug) {
+  const [tData, eData] = await Promise.all([
+    restGet(page, `/api/-/rest/${slug}?expand=[]`),
+    restGet(page, `/api/-/rest/${slug}/events?expand=[]`),
+  ]);
+  const t = tData?.entities?.tournament;
+  const events = eData?.entities?.event ?? [];
+  return {
+    homepage: !!t?.publishing?.publish,
+    registration: !!t?.publishing?.registration,
+    attendees: !!t?.publishing?.attendees,
+    events: events.length > 0 && events.every((e) => !!e.publishing?.publish),
+    discoverable: !!t?.approved,
+  };
+}
+
+/**
+ * A appeler juste apres le clone (fait avec publishing: true). start.gg ne
+ * publie automatiquement que si les prerequis sont remplis ; on attend que les
+ * events soient tous crees, on verifie l'etat reel, puis on ne publie a la main
+ * que ce qui manque. Meme forme de retour que publishTournament.
+ * @returns {Promise<Object>} { section: { ok, viaClone? , error? } }
+ */
+export async function ensureTournamentPublished(page, tournamentId, slug, { discoverable = true } = {}) {
+  const eventsReady = await waitForEventsToStabilize(page, tournamentId);
+
+  let state = null;
+  if (slug) {
+    try {
+      state = await getPublishState(page, slug);
+    } catch {
+      state = null; // verification impossible : on publie tout, c'est idempotent
+    }
+  }
+
+  const sectionNames = Object.keys(FEATURE_IDS);
+  const results = {};
+  for (const name of sectionNames) {
+    if (state?.[name]) results[name] = { ok: true, viaClone: true };
+  }
+
+  const missing = sectionNames.filter((name) => !state?.[name]);
+  const needDiscoverable = discoverable && !state?.discoverable;
+  if (discoverable && state?.discoverable) results.discoverable = { ok: true, viaClone: true };
+
+  if (missing.length > 0 || needDiscoverable) {
+    Object.assign(
+      results,
+      await publishTournament(page, tournamentId, { discoverable: needDiscoverable, sections: missing, eventsReady }),
+    );
   }
 
   return results;

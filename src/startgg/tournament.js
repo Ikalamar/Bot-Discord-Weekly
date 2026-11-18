@@ -52,12 +52,22 @@ function resolveSource(type, games) {
     return { srcTournamentId: registry[key], matchedKey: key, requestedKey: key, approximateMatch: false };
   }
 
-  const fallback = Object.entries(registry).find(([, id]) => id != null);
+  // Repli explicite sur Smash seul ("SSBU") ; a defaut, premiere reference du type.
+  const fallback =
+    registry.SSBU != null ? ['SSBU', registry.SSBU] : Object.entries(registry).find(([, id]) => id != null);
   if (!fallback) {
     throw new Error(`Aucun tournoi de reference dans source-registry.json pour "${type}". Ajoute au moins une entree.`);
   }
   const [fallbackKey, fallbackId] = fallback;
   return { srcTournamentId: fallbackId, matchedKey: fallbackKey, requestedKey: key, approximateMatch: true };
+}
+
+/**
+ * Quel modele serait utilise pour cette ligne, sans rien creer. `approximateMatch`
+ * vrai = aucun modele pour la combinaison de jeux demandee.
+ */
+function previewSource(row) {
+  return resolveSource(detectType(row.name), row.games);
 }
 
 /** Combine la date du sheet avec les horaires fixes de schedule.json. */
@@ -83,26 +93,54 @@ function computeDates(type, date) {
   return { startAt, endAt };
 }
 
-/**
- * Cree, publie et decrit le tournoi start.gg pour une ligne du sheet.
- * @param {{ name: string, date: Date, games: string[] }} row
- */
-async function createTournamentForRow(row) {
-  const type = detectType(row.name);
-  const { srcTournamentId, matchedKey, approximateMatch } = resolveSource(type, row.games);
-  const { startAt, endAt } = computeDates(type, row.date);
-
+function requireCredentials() {
   const email = process.env.STARTGG_EMAIL;
   const password = process.env.STARTGG_PASSWORD;
   if (!email || !password) throw new Error('STARTGG_EMAIL / STARTGG_PASSWORD manquants (voir .env.example).');
+  return { email, password };
+}
+
+async function openSession() {
+  const { StartGG } = await import(BROWSER_LIB_URL);
+  const gg = new StartGG({ ...requireCredentials(), headless: true, sessionFile: SESSION_FILE });
+  await gg.login();
+  return gg;
+}
+
+// Publie ce que le clone n'a pas publie, puis attend que la banniere soit
+// servie avant l'annonce, pour eviter que Discord ne fige un apercu par
+// defaut en cache (voir wait-for-banner.js).
+async function publishAndWait(gg, { id, slug, name }) {
+  const publishing = await gg.ensurePublished(id, slug, { discoverable: true });
+  for (const [feature, r] of Object.entries(publishing).filter(([, r]) => !r.ok)) {
+    console.warn(`Publication "${feature}" echouee pour "${name}": ${r.error}`);
+  }
+
+  const bannerReady = await waitForBannerReady(id, slug);
+  if (!bannerReady) {
+    console.warn(`Banniere non confirmee a temps pour "${name}" avant annonce (apercu Discord possiblement generique).`);
+  }
+  return publishing;
+}
+
+/**
+ * Cree le tournoi start.gg pour une ligne du sheet, et le publie sauf si
+ * `publish` est faux. Par defaut, un modele approximatif (jeux manquants)
+ * n'est PAS publie : c'est aux TOs de valider (voir publishCreatedTournament).
+ * @param {{ name: string, date: Date, games: string[] }} row
+ * @param {{ publish?: boolean }} [opts]
+ */
+async function createTournamentForRow(row, opts = {}) {
+  const type = detectType(row.name);
+  const { srcTournamentId, matchedKey, approximateMatch } = resolveSource(type, row.games);
+  const { startAt, endAt } = computeDates(type, row.date);
+  const publish = opts.publish ?? !approximateMatch;
 
   const config = loadConfig();
   if (!config.contact?.value) throw new Error('config/config.json : contact.value est vide.');
 
-  const { StartGG } = await import(BROWSER_LIB_URL);
-  const gg = new StartGG({ email, password, headless: true, sessionFile: SESSION_FILE });
+  const gg = await openSession();
   try {
-    await gg.login();
     const result = await gg.createTournament({
       name: row.name,
       primaryContact: config.contact.value,
@@ -110,22 +148,12 @@ async function createTournamentForRow(row) {
       startAt,
       endAt,
       srcTournamentId,
+      publish,
     });
 
     let publishing = null;
-    if (result.id) {
-      publishing = await gg.publishTournament(result.id, { discoverable: true });
-      for (const [feature, r] of Object.entries(publishing).filter(([, r]) => !r.ok)) {
-        console.warn(`Publication "${feature}" echouee pour "${row.name}": ${r.error}`);
-      }
-
-      // Laisse le temps a start.gg de propager la banniere fraichement clonee
-      // avant l'annonce, pour eviter que Discord ne fige un apercu par
-      // defaut en cache (voir wait-for-banner.js).
-      const bannerReady = await waitForBannerReady(result.id, result.slug);
-      if (!bannerReady) {
-        console.warn(`Banniere non confirmee a temps pour "${row.name}" avant annonce (apercu Discord possiblement generique).`);
-      }
+    if (publish && result.id) {
+      publishing = await publishAndWait(gg, { id: result.id, slug: result.slug, name: row.name });
     }
 
     return {
@@ -135,6 +163,7 @@ async function createTournamentForRow(row) {
       matchedKey,
       approximateMatch,
       requestedGames: row.games,
+      published: publish,
       publishing,
       startAt,
       timezone: schedule[type].timezone,
@@ -144,4 +173,26 @@ async function createTournamentForRow(row) {
   }
 }
 
-module.exports = { detectType, canonicalizeGame, comboKey, resolveSource, computeDates, createTournamentForRow };
+/**
+ * Publie un tournoi cree non publie (apres validation des TOs).
+ * @param {{ id: number, slug: string, name: string }} tournamentInfo
+ */
+async function publishCreatedTournament({ id, slug, name }) {
+  const gg = await openSession();
+  try {
+    return await publishAndWait(gg, { id, slug, name });
+  } finally {
+    await gg.close();
+  }
+}
+
+module.exports = {
+  detectType,
+  canonicalizeGame,
+  comboKey,
+  resolveSource,
+  previewSource,
+  computeDates,
+  createTournamentForRow,
+  publishCreatedTournament,
+};

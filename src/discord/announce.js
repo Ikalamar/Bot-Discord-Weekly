@@ -60,16 +60,10 @@ function successMessage(result) {
     type: result.type,
     date: result.startAt || null,
     timezone: result.timezone,
-    games: result.requestedGames,
+    // Repli sur un modele partiel : on annonce les jeux reellement presents.
+    games: result.approximateMatch ? result.matchedKey.split(',') : result.requestedGames,
     url: result.url,
   });
-}
-
-function warningMessage(result) {
-  return (
-    successMessage(result) +
-    `\n\n-# ⚠️ Aucune référence exacte pour "${result.requestedGames.join(', ')}" — clone fait depuis "${result.matchedKey}".`
-  );
 }
 
 function manualFallbackMessage(row, error) {
@@ -87,7 +81,6 @@ module.exports = {
   announce,
   weeklyAnnouncement,
   successMessage,
-  warningMessage,
   manualFallbackMessage,
   formatFrenchDate,
   roleMention,

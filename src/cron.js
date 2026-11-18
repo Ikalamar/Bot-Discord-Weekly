@@ -2,7 +2,9 @@
 //
 //   - tournoi deja existant sur start.gg -> demande dans le salon de controle
 //     s'il faut annoncer (aucune creation)
-//   - sinon -> creation + publication + annonce, sans intervention
+//   - sinon -> creation + publication + annonce, sans intervention. Sans modele
+//     exact pour les jeux : creation SANS publication, puis demande de validation
+//     aux TOs (salon de controle) avant de publier et annoncer
 //   - echec -> message d'instructions manuelles, pour qu'aucune weekly ne
 //     passe a la trappe en silence
 //
@@ -15,8 +17,9 @@ const sheets = require('./sheets');
 const tournament = require('./startgg/tournament');
 const { findExistingMatch } = require('./startgg/duplicate-check');
 const { hasBeenProcessed, markProcessed } = require('./state');
-const { announce, successMessage, warningMessage, manualFallbackMessage } = require('./discord/announce');
-const { askConfirmation } = require('./discord/confirm');
+const { announce, successMessage, manualFallbackMessage } = require('./discord/announce');
+const { askConfirmation, askPublishConfirmation } = require('./discord/confirm');
+const { loadConfig } = require('./config-store');
 
 async function runCheck(client) {
   let rows;
@@ -46,10 +49,24 @@ async function runCheck(client) {
     }
 
     try {
-      const result = await tournament.createTournamentForRow(row);
+      // Aucun modele pour cette combinaison de jeux : on cree la page SANS la
+      // publier, puis les TOs valident la publication (salon de controle). Sans
+      // salon de controle, personne a qui demander : comportement historique
+      // (creation + publication + annonce directes).
+      const source = tournament.previewSource(row);
+      const askFirst = source.approximateMatch && !!loadConfig().controlChannel;
+
+      const result = await tournament.createTournamentForRow(row, { publish: !askFirst });
       if (!result.url) throw new Error('Creation reussie mais aucune URL retournee par start.gg.');
 
-      await announce(client, result.approximateMatch ? warningMessage(result) : successMessage(result));
+      if (askFirst) {
+        await askPublishConfirmation(client, row, result);
+        markProcessed(row.name);
+        console.log(`Tournoi cree non publie pour "${row.name}" (pas de modele pour "${source.requestedKey}"): ${result.url} - validation demandee.`);
+        continue;
+      }
+
+      await announce(client, successMessage(result));
       markProcessed(row.name);
       console.log(`Tournoi cree pour "${row.name}": ${result.url}`);
     } catch (err) {

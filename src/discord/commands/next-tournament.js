@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const sheets = require('../../sheets');
+const tournament = require('../../startgg/tournament');
 const { findExistingMatch } = require('../../startgg/duplicate-check');
 const { loadConfig } = require('../../config-store');
 const { askConfirmation, askCreateConfirmation } = require('../confirm');
@@ -39,6 +40,13 @@ module.exports = {
       return;
     }
 
-    await askCreateConfirmation(interaction, row);
+    let source;
+    try {
+      source = tournament.previewSource(row);
+    } catch (err) {
+      await interaction.editReply(`Impossible de choisir un modèle pour **${row.name}** : ${err.message}`);
+      return;
+    }
+    await askCreateConfirmation(interaction, row, source);
   },
 };

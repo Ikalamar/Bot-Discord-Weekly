@@ -7,6 +7,8 @@
 //     controle s'il faut annoncer la weekly.
 //   - "create" : /next-tournament n'a trouve aucun doublon -> on demande s'il
 //     faut lancer la creation.
+//   - "publish" : tournoi cree sans modele exact (non publie) -> on demande s'il
+//     faut le publier et l'annoncer avec les events manquants.
 
 const fs = require('fs');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
@@ -117,11 +119,17 @@ async function handleAnnounceButton(interaction, rowNumber, confirmed) {
 
 // --- "Faut-il lancer la creation de ce tournoi ?" ----------------------------
 
+// Libelle du modele de repli : "Smash seul" pour SSBU, sinon les jeux du modele.
+function fallbackLabel(source) {
+  return source.matchedKey === 'SSBU' ? 'Smash seul' : source.matchedKey.split(',').join(' + ');
+}
+
 /**
- * @param {import('discord.js').ChatInputCommandInteraction} interaction  Deja deferree.
+ * Enregistre la demande en attente et construit le message + boutons.
  * @param {{ rowNumber: number, name: string, date: Date, games: string[] }} row
+ * @param {{ approximateMatch: boolean, matchedKey: string }} [source]  Modele resolu (previewSource).
  */
-async function askCreateConfirmation(interaction, row) {
+function buildCreatePrompt(row, source) {
   const pending = loadPending();
   pending[row.rowNumber] = {
     kind: 'create',
@@ -137,13 +145,24 @@ async function askCreateConfirmation(interaction, row) {
     new ButtonBuilder().setCustomId(`create-no:${row.rowNumber}`).setLabel('Non').setStyle(ButtonStyle.Secondary),
   );
 
-  await interaction.editReply({
-    content:
-      `📅 Prochain tournoi sans page start.gg : **${row.name}** le ${row.date.toLocaleDateString('fr-FR')} ` +
-      `(**${row.games.join(', ') || 'jeux non precises'}**)\n` +
-      `Je lance la création ?`,
-    components: [buttons],
-  });
+  const header =
+    `📅 Prochain tournoi sans page start.gg : **${row.name}** le ${row.date.toLocaleDateString('fr-FR')} ` +
+    `(**${row.games.join(', ') || 'jeux non precises'}**)\n`;
+  const body = source?.approximateMatch
+    ? `ℹ️ Aucun modèle pour cette combinaison de jeux : la page sera créée avec **${fallbackLabel(source)}** ` +
+      `et **non publiée**, je demanderai validation avant de publier. Je lance la création ?`
+    : 'Je lance la création ?';
+
+  return { content: header + body, components: [buttons] };
+}
+
+/**
+ * @param {import('discord.js').ChatInputCommandInteraction} interaction  Deja deferree.
+ * @param {{ rowNumber: number, name: string, date: Date, games: string[] }} row
+ * @param {{ approximateMatch: boolean, matchedKey: string }} [source]
+ */
+async function askCreateConfirmation(interaction, row, source) {
+  await interaction.editReply(buildCreatePrompt(row, source));
 }
 
 async function handleCreateButton(interaction, rowNumber, confirmed) {
@@ -167,7 +186,7 @@ async function handleCreateButton(interaction, rowNumber, confirmed) {
   await interaction.editReply({ content: `${baseContent}\n\n⏳ Création en cours...`, components: [] });
 
   const tournament = require('../startgg/tournament');
-  const { announce, successMessage, warningMessage } = require('./announce');
+  const { announce, successMessage } = require('./announce');
 
   const row = { rowNumber: Number(rowNumber), name: entry.name, date: new Date(entry.date), games: entry.games };
 
@@ -175,7 +194,16 @@ async function handleCreateButton(interaction, rowNumber, confirmed) {
     const result = await tournament.createTournamentForRow(row);
     if (!result.url) throw new Error('Creation reussie mais aucune URL retournee par start.gg.');
 
-    await announce(interaction.client, result.approximateMatch ? warningMessage(result) : successMessage(result));
+    if (!result.published) {
+      const where = await askPublishConfirmation(interaction.client, row, result, interaction.channel);
+      await interaction.editReply({
+        content: `${baseContent}\n\n✅ Créé, non publié : ${result.url}\nValidation de publication demandée dans ${where}.`,
+        components: [],
+      });
+      return;
+    }
+
+    await announce(interaction.client, successMessage(result));
     await interaction.editReply({ content: `${baseContent}\n\n✅ Créé et annoncé : ${result.url}`, components: [] });
   } catch (err) {
     console.error(`Creation manuelle echouee pour "${row.name}":`, err.message);
@@ -183,10 +211,103 @@ async function handleCreateButton(interaction, rowNumber, confirmed) {
   }
 }
 
+// --- "Publier malgre les events manquants ?" ----------------------------------
+// Tournoi cree sans modele exact : la page existe mais n'est pas publiee. Les
+// TOs decident s'ils la publient (et l'annoncent) telle quelle.
+
+/**
+ * @param {import('discord.js').Client} client
+ * @param {{ rowNumber: number, name: string, games: string[] }} row
+ * @param {Object} result  Retour de createTournamentForRow (non publie).
+ * @param {import('discord.js').TextBasedChannel} [fallbackChannel]  Utilise sans salon de controle.
+ * @returns {Promise<string>} Mention du salon ou la demande a ete postee.
+ */
+async function askPublishConfirmation(client, row, result, fallbackChannel) {
+  const config = loadConfig();
+  const channel = config.controlChannel ? await client.channels.fetch(config.controlChannel) : fallbackChannel;
+  if (!channel) throw new Error('Aucun salon pour demander la validation (voir /salon-admin).');
+
+  const announcedGames = result.matchedKey.split(',');
+  const pending = loadPending();
+  pending[row.rowNumber] = {
+    kind: 'publish',
+    name: row.name,
+    tournamentId: result.id,
+    slug: result.slug,
+    url: result.url,
+    type: result.type,
+    games: announcedGames,
+    startAt: result.startAt.toISOString(),
+    timezone: result.timezone,
+    createdAt: new Date().toISOString(),
+  };
+  savePending(pending);
+
+  const buttons = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`publish-yes:${row.rowNumber}`).setLabel('Oui, publier et annoncer').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`publish-no:${row.rowNumber}`).setLabel('Non, laisser tel quel').setStyle(ButtonStyle.Secondary),
+  );
+
+  await channel.send({
+    content:
+      `📝 **${row.name}** est créé sur start.gg mais **non publié** : ${result.url}\n` +
+      `Aucun modèle pour **${row.games.join(', ')}** : la page ne contient que **${announcedGames.join(', ')}** ` +
+      `(events manquants à ajouter à la main).\n` +
+      `Je la publie et je l'annonce quand même ?`,
+    components: [buttons],
+  });
+  return `<#${channel.id}>`;
+}
+
+async function handlePublishButton(interaction, rowNumber, confirmed) {
+  const pending = loadPending();
+  const entry = pending[rowNumber];
+  if (!entry) {
+    await interaction.reply({ content: 'Cette confirmation a deja ete traitee.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+  delete pending[rowNumber];
+  savePending(pending);
+
+  await interaction.deferUpdate();
+  const baseContent = interaction.message.content;
+
+  if (!confirmed) {
+    await interaction.editReply({
+      content: `${baseContent}\n\n❌ Publication annulée : la page reste non publiée (${entry.url}), rien n'est annoncé.`,
+      components: [],
+    });
+    return;
+  }
+
+  await interaction.editReply({ content: `${baseContent}\n\n⏳ Publication en cours...`, components: [] });
+
+  const tournament = require('../startgg/tournament');
+  const { announce, weeklyAnnouncement } = require('./announce');
+
+  try {
+    await tournament.publishCreatedTournament({ id: entry.tournamentId, slug: entry.slug, name: entry.name });
+    await announce(
+      interaction.client,
+      weeklyAnnouncement({
+        type: entry.type,
+        date: new Date(entry.startAt),
+        timezone: entry.timezone,
+        games: entry.games,
+        url: entry.url,
+      }),
+    );
+    await interaction.editReply({ content: `${baseContent}\n\n✅ Publié et annoncé : ${entry.url}`, components: [] });
+  } catch (err) {
+    console.error(`Publication echouee pour "${entry.name}":`, err.message);
+    await interaction.editReply({ content: `${baseContent}\n\n❌ Échec de la publication : ${err.message}`, components: [] });
+  }
+}
+
 // --- Aiguillage --------------------------------------------------------------
 
 function isConfirmationButton(customId) {
-  return /^(announce|skip|create-yes|create-no):/.test(customId);
+  return /^(announce|skip|create-yes|create-no|publish-yes|publish-no):/.test(customId);
 }
 
 async function handleConfirmationButton(interaction) {
@@ -195,7 +316,16 @@ async function handleConfirmationButton(interaction) {
   if (action === 'create-yes' || action === 'create-no') {
     return handleCreateButton(interaction, rowNumber, action === 'create-yes');
   }
+  if (action === 'publish-yes' || action === 'publish-no') {
+    return handlePublishButton(interaction, rowNumber, action === 'publish-yes');
+  }
   return handleAnnounceButton(interaction, rowNumber, action === 'announce');
 }
 
-module.exports = { askConfirmation, askCreateConfirmation, isConfirmationButton, handleConfirmationButton };
+module.exports = {
+  askConfirmation,
+  askCreateConfirmation,
+  askPublishConfirmation,
+  isConfirmationButton,
+  handleConfirmationButton,
+};

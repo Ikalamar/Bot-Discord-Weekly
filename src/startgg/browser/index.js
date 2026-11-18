@@ -3,7 +3,7 @@
 //   import { StartGG } from './browser/index.js';
 //   const gg = new StartGG({ email, password });
 //   const t = await gg.createTournament({ name, primaryContact, startAt, endAt, srcTournamentId });
-//   await gg.publishTournament(t.id);
+//   await gg.ensurePublished(t.id, t.slug);
 //   await gg.close();
 //
 // Pourquoi un navigateur plutot que de simples requetes HTTP : le login et la
@@ -15,7 +15,7 @@ import { chromium } from 'playwright';
 import { STATE_FILE, CONTEXT_OPTS, CREATE_PAGE } from './config.js';
 import { performLogin } from './login.js';
 import { createTournamentOnPage, SourceTournamentNotFoundError } from './create-tournament.js';
-import { publishTournament } from './publish-tournament.js';
+import { publishTournament, ensureTournamentPublished } from './publish-tournament.js';
 
 export { SourceTournamentNotFoundError };
 
@@ -55,7 +55,7 @@ export class StartGG {
       });
       this._page = await this._context.newPage();
       await this._page.goto(CREATE_PAGE, { waitUntil: 'networkidle' });
-      if (!this._page.url().includes('/login')) {
+      if (!(await this._isLoggedOut())) {
         return this; // session encore valide
       }
       await this._context.close();
@@ -68,6 +68,13 @@ export class StartGG {
     return this;
   }
 
+  // Session expiree : start.gg redirige vers /login OU affiche "Login Required"
+  // directement sur la page demandee (URL inchangee).
+  async _isLoggedOut() {
+    if (this._page.url().includes('/login')) return true;
+    return (await this._page.getByText('You must be logged in').count().catch(() => 0)) > 0;
+  }
+
   /**
    * Cree un tournoi. Passer `srcTournamentId` pour cloner un tournoi existant.
    * @returns {Promise<{ id: number|null, slug: string|null, name: string }>}
@@ -77,7 +84,7 @@ export class StartGG {
     if (!this._page.url().startsWith(CREATE_PAGE)) {
       await this._page.goto(CREATE_PAGE, { waitUntil: 'networkidle' });
     }
-    if (this._page.url().includes('/login')) {
+    if (await this._isLoggedOut()) {
       await this.login({ force: true });
       await this._page.goto(CREATE_PAGE, { waitUntil: 'networkidle' });
     }
@@ -92,6 +99,18 @@ export class StartGG {
   async publishTournament(tournamentId, opts) {
     if (!this._page) await this.login();
     return publishTournament(this._page, tournamentId, opts);
+  }
+
+  /**
+   * A appeler apres un clone fait avec publishing: true : verifie l'etat reel
+   * de publication et ne publie a la main que les sections manquantes.
+   * @param {number} tournamentId
+   * @param {string|null} slug  Slug complet ("tournament/..."), pour la verification.
+   * @returns {Promise<Object>} resultat par section { ok, viaClone?, error? }
+   */
+  async ensurePublished(tournamentId, slug, opts) {
+    if (!this._page) await this.login();
+    return ensureTournamentPublished(this._page, tournamentId, slug, opts);
   }
 
   async close() {

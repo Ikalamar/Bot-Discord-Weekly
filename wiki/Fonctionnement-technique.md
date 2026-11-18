@@ -121,7 +121,9 @@ Pour chaque ligne "Weekly" du sheet a J-3 ou moins :
     OUI -> confirmation dans le salon de controle, marque comme traite
     NON -> modele exact pour la combinaison de jeux ?
              OUI -> clone + publication + annonce automatique, marque comme traite
-             NON -> clone depuis le modele de repli (Smash seul) SANS publier
+             NON -> clone depuis le modele de repli SANS publier (le modele qui
+                    couvre le plus de jeux demandes, ex: "SF6,SSBU" pour
+                    SSBU+SF6+Riftbound ; a defaut Smash seul)
                     (publishing: false, short URL non deplace), puis demande
                     dans le salon de controle : "publier et annoncer avec les
                     events manquants ?" (boutons Oui/Non). Oui -> publication

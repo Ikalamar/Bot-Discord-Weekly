@@ -111,6 +111,7 @@ Non versionné.
   "discordChannels": ["123456789"],
   "controlChannel": "987654321",
   "weeklyRoleId": "555555555",
+  "toRoleId": "444444444",
   "contact": {
     "type": "discord",
     "value": "https://discord.gg/xxxxxxx"

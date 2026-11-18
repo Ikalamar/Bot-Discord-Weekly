@@ -52,9 +52,15 @@ function resolveSource(type, games) {
     return { srcTournamentId: registry[key], matchedKey: key, requestedKey: key, approximateMatch: false };
   }
 
-  // Repli explicite sur Smash seul ("SSBU") ; a defaut, premiere reference du type.
+  // Repli : le modele qui couvre le plus de jeux demandes, sans en contenir
+  // d'autres (ex: demande SSBU+SF6+Riftbound -> modele "SF6,SSBU" plutot que
+  // "SSBU" seul). A defaut, Smash seul ("SSBU"), puis la premiere reference.
+  const requested = new Set(key.split(','));
+  const subsets = Object.entries(registry)
+    .filter(([k, id]) => id != null && k.split(',').every((g) => requested.has(g)))
+    .sort((a, b) => b[0].split(',').length - a[0].split(',').length);
   const fallback =
-    registry.SSBU != null ? ['SSBU', registry.SSBU] : Object.entries(registry).find(([, id]) => id != null);
+    subsets[0] ?? (registry.SSBU != null ? ['SSBU', registry.SSBU] : Object.entries(registry).find(([, id]) => id != null));
   if (!fallback) {
     throw new Error(`Aucun tournoi de reference dans source-registry.json pour "${type}". Ajoute au moins une entree.`);
   }

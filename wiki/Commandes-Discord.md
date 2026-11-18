@@ -37,23 +37,19 @@ postée. La création automatique n'est pas affectée.
 
 ## `/set-role`
 
-Rôle mentionné par le bot : joueurs (annonces publiques) ou TOs (demandes de
-validation : création, publication, annonce d'un tournoi déjà existant).
+Rôle mentionné en tête des annonces publiques.
 
 ```
 /set-role role:@Weekly
-/set-role role:@TO cible:TOs
 ```
 
 | Option | Requis | Description |
 | --- | --- | --- |
 | `role` | oui | Rôle à mentionner |
-| `cible` | non | `Joueurs` (défaut, annonces publiques) ou `TOs` (demandes de validation) |
 | `retirer` | non | `true` pour retirer la mention |
 
-Mention des joueurs enveloppée dans un spoiler (`||@Weekly||`) : notification
-envoyée, tag masqué dans le message. La mention des TOs est affichée en clair
-en tête des demandes de validation.
+Mention enveloppée dans un spoiler (`||@Weekly||`) : notification envoyée,
+tag masqué dans le message.
 
 ## `/next-tournament`
 

@@ -1,9 +1,10 @@
 {
   "_comment": "Cle = jeux tries alphabetiquement, joints par virgule (ex: 'SSBU,2XKO'). Valeur = id numerique d'un vrai tournoi start.gg deja publie avec exactement cette liste d'events, utilise comme source de clone. Rempli/maintenu a la main par l'organisateur : l'id est visible via GetTournament sur l'API publique.",
   "72 Hit Combo": {
-    "SSBU": 937445
+    "SSBU": 975073,
+    "SSBU,SF6": 976595
   },
   "O'Corner Pressure": {
-    "SSBU": 975073
+    "SSBU": 973841
   }
 }

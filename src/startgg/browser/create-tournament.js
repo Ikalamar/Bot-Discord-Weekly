@@ -122,8 +122,43 @@ async function cloneTournament(page, payload) {
     throw new Error(`Clone failed: ${message}`);
   }
 
-  const t = data?.entities?.tournament?.[0];
-  return { id: t?.id ?? null, slug: t?.slug ?? null, name: t?.name ?? payload.name };
+  // Selon la reponse, entities.tournament est un tableau ou un objet seul ;
+  // `result` porte l'id quand resultEntity vaut "tournament".
+  const entity = data?.entities?.tournament;
+  const t = Array.isArray(entity) ? entity[0] : entity;
+  let id = t?.id ?? (data?.resultEntity === 'tournament' ? data.result : null) ?? null;
+  let slug = t?.slug ?? null;
+
+  // Le tournoi existe (clone reussi) : si la reponse ne le decrit pas, on le
+  // retrouve par son slug devine depuis le nom (start.gg slugifie le nom).
+  if (!id || !slug) {
+    console.warn(`Clone reussi mais tournoi non decrit dans la reponse (cles: ${Object.keys(data).join(', ')}) - recherche par nom.`);
+    const found = await lookupBySlugGuess(page, payload.name);
+    id = id ?? found?.id ?? null;
+    slug = slug ?? found?.slug ?? null;
+  }
+  return { id, slug, name: t?.name ?? payload.name };
+}
+
+async function lookupBySlugGuess(page, name) {
+  const guess = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  try {
+    const { status, body } = await page.evaluate(
+      async ({ path, headers }) => {
+        const res = await fetch(path, { headers });
+        return { status: res.status, body: await res.text() };
+      },
+      { path: `/api/-/rest/tournament/${guess}?expand=[]`, headers: API_HEADERS },
+    );
+    if (status !== 200) return null;
+    const t = JSON.parse(body)?.entities?.tournament;
+    return t ? { id: t.id ?? null, slug: t.slug ?? null } : null;
+  } catch {
+    return null;
+  }
 }
 
 // --- Creation vierge (formulaire) --------------------------------------------

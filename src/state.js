@@ -8,7 +8,7 @@
 // Un echec n'est volontairement pas marque, pour etre reessaye le lendemain.
 
 const fs = require('fs');
-const { DATA_DIR, PROCESSED_FILE } = require('./paths');
+const { DATA_DIR, PROCESSED_FILE, LAST_CHECK_FILE } = require('./paths');
 
 function load() {
   if (!fs.existsSync(PROCESSED_FILE)) return {};
@@ -30,4 +30,20 @@ function markProcessed(name) {
   save(store);
 }
 
-module.exports = { hasBeenProcessed, markProcessed };
+// Date (jour calendaire Europe/Paris, "YYYY-MM-DD") de la derniere verification
+// quotidienne menee a bout. Sert au rattrapage si le bot demarre apres 8h.
+function getLastCheckDate() {
+  if (!fs.existsSync(LAST_CHECK_FILE)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(LAST_CHECK_FILE, 'utf8')).date ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function setLastCheckDate(date) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(LAST_CHECK_FILE, JSON.stringify({ date, at: new Date().toISOString() }, null, 2) + '\n', 'utf8');
+}
+
+module.exports = { hasBeenProcessed, markProcessed, getLastCheckDate, setLastCheckDate };

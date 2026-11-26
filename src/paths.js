@@ -23,6 +23,7 @@ module.exports = {
 
   PENDING_FILE: path.join(DATA_DIR, 'pending-confirmations.json'),
   PROCESSED_FILE: path.join(DATA_DIR, 'processed-tournaments.json'),
+  LAST_CHECK_FILE: path.join(DATA_DIR, 'last-check.json'),
   SESSION_FILE: path.join(DATA_DIR, 'startgg-session.json'),
 
   ENV_FILE: path.join(ROOT, '.env'),

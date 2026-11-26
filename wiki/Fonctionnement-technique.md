@@ -138,6 +138,13 @@ Pour chaque ligne "Weekly" du sheet a J-3 ou moins :
        PAS marque comme traite (nouvel essai le lendemain)
 ```
 
+**Rattrapage au démarrage** : le jour calendaire (Europe/Paris) de la dernière
+vérification menée à bout est mémorisé dans `data/last-check.json`. Si le bot
+démarre après 8h et que la vérification du jour n'a pas tourné (bot arrêté,
+redémarré, crash), elle est lancée immédiatement. Le jour n'est mémorisé que si
+la lecture du sheet a abouti : un sheet injoignable est donc retenté au
+redémarrage suivant. Deux vérifications ne tournent jamais en parallèle.
+
 Traitement indépendant par ligne : un échec n'empêche pas les autres de
 passer.
 

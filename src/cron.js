@@ -16,24 +16,69 @@ const cron = require('node-cron');
 const sheets = require('./sheets');
 const tournament = require('./startgg/tournament');
 const { findExistingMatch } = require('./startgg/duplicate-check');
-const { hasBeenProcessed, markProcessed } = require('./state');
+const { hasBeenProcessed, markProcessed, getLastCheckDate, setLastCheckDate } = require('./state');
 const { announce, successMessage, manualFallbackMessage } = require('./discord/announce');
 const { askConfirmation, askPublishConfirmation } = require('./discord/confirm');
 const { loadConfig } = require('./config-store');
 
+const TIMEZONE = 'Europe/Paris';
+const CHECK_HOUR = 8;
+
+// Jour calendaire et heure a Paris, independants du fuseau de la machine.
+function parisNow(date = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(date)
+      .map((p) => [p.type, p.value]),
+  );
+  return { day: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
+}
+
+let running = false;
+
+/**
+ * Verification complete. Ne la lance pas deux fois en parallele (rattrapage au
+ * demarrage + 8h pile). Le jour n'est memorise comme "verifie" que si la
+ * lecture du sheet a abouti : sinon un redemarrage reessaie.
+ */
 async function runCheck(client) {
+  if (running) {
+    console.log('Verification deja en cours, ignoree.');
+    return;
+  }
+  running = true;
+  try {
+    const sheetRead = await processRows(client);
+    if (sheetRead) setLastCheckDate(parisNow().day);
+  } finally {
+    running = false;
+  }
+}
+
+/** @returns {Promise<boolean>} false si le sheet n'a pas pu etre lu. */
+async function processRows(client) {
   let rows;
   try {
     rows = await sheets.getPendingRows();
   } catch (err) {
     console.error('Lecture du Google Sheet impossible:', err.message);
-    return;
+    return false;
   }
 
   console.log(`${rows.length} ligne(s) a traiter.`);
 
   for (const row of rows) {
-    if (hasBeenProcessed(row.name)) continue;
+    if (hasBeenProcessed(row.name)) {
+      console.log(`"${row.name}" deja traite - ignore.`);
+      continue;
+    }
 
     const match = await findExistingMatch(row.name);
 
@@ -74,6 +119,7 @@ async function runCheck(client) {
       await announce(client, manualFallbackMessage(row, err)).catch(() => {});
     }
   }
+  return true;
 }
 
 // Tous les jours a 8h, heure de Paris (independant du fuseau du serveur).
@@ -83,9 +129,17 @@ function start(client) {
     () => {
       runCheck(client).catch((err) => console.error('Verification quotidienne plantee:', err));
     },
-    { timezone: 'Europe/Paris' },
+    { timezone: TIMEZONE },
   );
   console.log('Verification quotidienne programmee (8h00 Europe/Paris).');
+
+  // Rattrapage : demarre apres 8h sans que la verification du jour ait tourne
+  // (bot arrete, redemarre, crash...) -> on la lance tout de suite.
+  const now = parisNow();
+  if (now.hour >= CHECK_HOUR && getLastCheckDate() !== now.day) {
+    console.log("Verification du jour pas encore faite (demarrage apres 8h) : rattrapage lance.");
+    runCheck(client).catch((err) => console.error('Rattrapage de la verification plante:', err));
+  }
 }
 
 module.exports = { start, runCheck };
